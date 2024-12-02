@@ -1,19 +1,19 @@
 #include <WiFi.h>
-#include <Adafruit_Sensor.h>
 #include <DHT.h>
+#include <Adafruit_Sensor.h>
 #include <Adafruit_BMP085.h>
 #include "UbidotsEsp32Mqtt.h"
 
-#define DHTPIN 23      // Pin donde está conectado el DHT11
+#define DHTPIN 4       // Pin donde está conectado el DHT11
 #define DHTTYPE DHT11  // Tipo de sensor DHT
 
-#define LAB_TEMP "temperatura";
-#define LAB_HUM "humedad";
-#define LAB_PRES "presion";
-#define LAB_DEVICE "test1";
+#define LAB_TEMP "temperatura"
+#define LAB_HUM "humedad"
+#define LAB_PRES "presion"
+#define LAB_DEVICE "test1"
 
-const char* ssid = "Velocity_DarkWeb";
-const char* password = "*********************";
+const char* ssid = "*********";
+const char* password = "*********";
 const char* token = "BBUS-N50EYSK1I06Yw1nZcSFQoL2aEAFDLh";
 
 Ubidots ubidots(token);
@@ -24,7 +24,6 @@ long lastMsg = 0;
 
 void setup() {
   Serial.begin(9600);
-  setup_wifi();
   dht.begin();
 
   // Configuración Ubidots
@@ -33,44 +32,41 @@ void setup() {
   ubidots.setup();
   ubidots.reconnect();
 
-  if (!bmp.begin()) {
+  while (!bmp.begin()) {
     Serial.println("No se pudo encontrar el sensor BMP180.");
-    while (1)
-      ;
+    delay(1000);
   }
+
+  Serial.println("Sensor BMP180 configurado.");
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Mensaje recibido [");
   Serial.print(topic);
   Serial.print("]: ");
+
   for (int i = 0; i < length; i++) {
     Serial.print((char)payload[i]);
   }
-  Serial.println();
-}
-
-void setup_wifi() {
-  delay(10);
 
   Serial.println();
-  Serial.print("Conectando a red ");
-  Serial.println(ssid);
-
-  WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-
-  Serial.println("");
-  Serial.println("WiFi conectado");
-  Serial.println(WiFi.localIP());
 }
 
 void loop() {
-  // Conexiòn y reintentos a ubidots
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+  float p = bmp.readPressure();
+
+  Serial.println("Temperatura: ");
+  Serial.println(String(t));
+  Serial.println("Humedad: ");
+  Serial.println(String(h));
+  Serial.println("Presión: ");
+  Serial.println(String(p));
+
+  delay(1000);
+
+  // Conexión y reintentos a ubidots
   if (!ubidots.connected()) {
     ubidots.reconnect();
   }
@@ -79,21 +75,24 @@ void loop() {
   if (now - lastMsg > 3000) {
     lastMsg = now;
 
-    float h = dht.readHumidity();
-    float t = dht.readTemperature();
-    float p = bmp.readPressure();
 
-    if (isnan(h) || isnan(t) || isnan(p)) {
+    if (isnan(h) || isnan(t)) {
       Serial.println("Error al leer los sensores");
 
       return;
     }
 
     Serial.print("Enviando datos a Ubidots: ");
-    ubidots.add(VARIABLE_LABEL_1, temperature);
-    ubidots.add(VARIABLE_LABEL_2, humidity);
+    ubidots.add(LAB_TEMP, t);
+    ubidots.add(LAB_HUM, h);
 
-    bool success = ubidots.publish(DEVICE_LABEL);
+    if (!isnan(p)) {
+      pHPa = p / 100;
+
+      ubidots.add(LAB_PRES, pHPa);
+    }
+
+    bool success = ubidots.publish(LAB_DEVICE);
 
     if (success) {
       Serial.println("Datos enviados");
