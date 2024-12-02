@@ -6,14 +6,15 @@
 
 #define DHTPIN 4       // Pin donde está conectado el DHT11
 #define DHTTYPE DHT11  // Tipo de sensor DHT
+#define LED_PIN 5      // Pin donde está conectado el LED
 
 #define LAB_TEMP "temperatura"
 #define LAB_HUM "humedad"
 #define LAB_PRES "presion"
 #define LAB_DEVICE "test1"
 
-const char* ssid = "*********";
-const char* password = "*********";
+const char* ssid = "Internet_UNL";
+const char* password = "UNL1859WiFi";
 const char* token = "BBUS-N50EYSK1I06Yw1nZcSFQoL2aEAFDLh";
 
 Ubidots ubidots(token);
@@ -26,9 +27,13 @@ void setup() {
   Serial.begin(9600);
   dht.begin();
 
+  // Configuración del LED
+  pinMode(LED_PIN, OUTPUT);  // Configuramos el pin del LED como salida
+  digitalWrite(LED_PIN, LOW); // Apagamos el LED inicialmente
+
   // Configuración Ubidots
   ubidots.connectToWifi(ssid, password);
-  ubidots.setCallback(callback);
+  ubidots.setCallback(callback); // Callback para controlar el LED
   ubidots.setup();
   ubidots.reconnect();
 
@@ -45,11 +50,21 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print(topic);
   Serial.print("]: ");
 
+  String message;
   for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
+    message += (char)payload[i];
   }
 
-  Serial.println();
+  Serial.println(message);
+
+  // Control del LED desde Ubidots
+  if (message == "1") {
+    digitalWrite(LED_PIN, HIGH);  // Encender el LED
+    Serial.println("LED Encendido");
+  } else if (message == "0") {
+    digitalWrite(LED_PIN, LOW);   // Apagar el LED
+    Serial.println("LED Apagado");
+  }
 }
 
 void loop() {
@@ -66,7 +81,7 @@ void loop() {
 
   delay(1000);
 
-  // Conexión y reintentos a ubidots
+  // Conexión y reintentos a Ubidots
   if (!ubidots.connected()) {
     ubidots.reconnect();
   }
@@ -75,10 +90,8 @@ void loop() {
   if (now - lastMsg > 3000) {
     lastMsg = now;
 
-
     if (isnan(h) || isnan(t)) {
       Serial.println("Error al leer los sensores");
-
       return;
     }
 
@@ -87,8 +100,7 @@ void loop() {
     ubidots.add(LAB_HUM, h);
 
     if (!isnan(p)) {
-      pHPa = p / 100;
-
+      float pHPa = p / 100; // Convertir presión a hPa
       ubidots.add(LAB_PRES, pHPa);
     }
 
